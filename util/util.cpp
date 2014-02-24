@@ -367,6 +367,27 @@ QString userDataDir()
     return str;
 }
 
+static QString randomString;
+static QString getRandomString()
+{
+   const QString possibleCharacters("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789");
+   const int randomStringLength = 12; // assuming you want random strings of 12 characters
+
+   randomString.clear();
+   for(int i=0; i<randomStringLength; ++i)
+   {
+       int index = qrand() % possibleCharacters.length();
+       QChar nextChar = possibleCharacters.at(index);
+       randomString.append(nextChar);
+   }
+   return randomString;
+}
+
+QString randomProblemFileName(bool generateNew)
+{
+    return tempProblemDir() + "/temp" + (generateNew ? getRandomString() : randomString);
+}
+
 QString tempProblemFileName()
 {
     return tempProblemDir() + "/temp";

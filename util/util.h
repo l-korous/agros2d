@@ -151,6 +151,9 @@ AGROS_UTIL_API QString cacheProblemDir();
 // get user dir
 AGROS_UTIL_API QString userDataDir();
 
+// get random filename
+AGROS_UTIL_API QString randomProblemFileName(bool generateNew);
+
 // get temp filename
 AGROS_UTIL_API QString tempProblemFileName();
 

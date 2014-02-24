@@ -65,9 +65,16 @@ bool MeshGeneratorTriangle::mesh()
     if (writeToTriangle())
     {
         // exec triangle
+        if(this->m_process)
+        {
+            this->m_process->terminate();
+            delete this->m_process;
+            this->m_process = NULL;
+        }
         m_process = new QProcess();
-        m_process->setStandardOutputFile(tempProblemFileName() + ".triangle.out");
-        m_process->setStandardErrorFile(tempProblemFileName() + ".triangle.err");
+        m_process->setStandardOutputFile(randomProblemFileName(false) + ".triangle.out");
+        m_process->setStandardErrorFile(randomProblemFileName(false) + ".triangle.err");
+
         connect(m_process, SIGNAL(error(QProcess::ProcessError)), this, SLOT(meshTriangleError(QProcess::ProcessError)));
         connect(m_process, SIGNAL(finished(int)), this, SLOT(meshTriangleCreated(int)));
 
@@ -77,16 +84,14 @@ bool MeshGeneratorTriangle::mesh()
         if (QFile::exists(QApplication::applicationDirPath() + QDir::separator() + "triangle"))
             triangleBinary = QApplication::applicationDirPath() + QDir::separator() + "triangle";
 
-        QString triangleCommand = "%1 -p -P -q31.0 -e -A -a -z -Q -I -n -o2 \"%2\"";
-        m_process->start(triangleCommand.
-                         arg(triangleBinary).
-                         arg(tempProblemFileName()));
+        QString triangleCommand = triangleBinary + " -Q -p -P -q31.0 -e -A -a -z -I -n -o2 \"" + randomProblemFileName(false) + "\"";
 
-        // execute an event loop to process the request (nearly-synchronous)
-        QEventLoop eventLoop;
-        connect(m_process, SIGNAL(finished(int)), &eventLoop, SLOT(quit()));
-        connect(m_process, SIGNAL(error(QProcess::ProcessError)), &eventLoop, SLOT(quit()));
-        eventLoop.exec();
+        m_process->start(triangleCommand);
+
+        if (!m_process->waitForStarted())
+            Agros2D::log()->printError(tr("Mesh generator"), tr("Could not start Triangle - %1").arg(m_process->errorString()));
+        else
+            m_process->waitForFinished(10000);
     }
     else
     {
@@ -100,7 +105,9 @@ void MeshGeneratorTriangle::meshTriangleError(QProcess::ProcessError error)
 {
     m_isError = true;
     Agros2D::log()->printError(tr("Mesh generator"), tr("Could not start Triangle"));
-    m_process->kill();
+    QString p_stdout = m_process->readAllStandardOutput();
+    QString p_stderr = m_process->readAllStandardError();
+    this->m_process->terminate();
 }
 
 void MeshGeneratorTriangle::meshTriangleCreated(int exitCode)
@@ -112,16 +119,15 @@ void MeshGeneratorTriangle::meshTriangleCreated(int exitCode)
         // convert triangle mesh to hermes mesh
         if (readTriangleMeshFormat())
         {
-            // Agros2D::log()->printDebug(tr("Mesh generator"), tr("Mesh was converted to Hermes2D mesh file"));
-
+            m_process->terminate();
             //  remove triangle temp files
-            QFile::remove(tempProblemFileName() + ".poly");
-            QFile::remove(tempProblemFileName() + ".node");
-            QFile::remove(tempProblemFileName() + ".edge");
-            QFile::remove(tempProblemFileName() + ".ele");
-            QFile::remove(tempProblemFileName() + ".neigh");
-            QFile::remove(tempProblemFileName() + ".triangle.out");
-            QFile::remove(tempProblemFileName() + ".triangle.err");
+            QFile::remove(randomProblemFileName(false) + ".triangle.out");
+            QFile::remove(randomProblemFileName(false) + ".triangle.err");
+            QFile::remove(randomProblemFileName(false) + ".poly");
+            QFile::remove(randomProblemFileName(false) + ".node");
+            QFile::remove(randomProblemFileName(false) + ".edge");
+            QFile::remove(randomProblemFileName(false) + ".ele");
+            QFile::remove(randomProblemFileName(false) + ".neigh");
         }
         else
         {
@@ -132,10 +138,6 @@ void MeshGeneratorTriangle::meshTriangleCreated(int exitCode)
     else
     {
         m_isError = true;
-        QString errorMessage = readFileContent(tempProblemFileName() + ".triangle.err");
-        errorMessage.insert(0, "\n");
-        errorMessage.append("\n");
-        Agros2D::log()->printError(tr("Mesh generator"), errorMessage);
     }
 }
 
@@ -159,7 +161,7 @@ bool MeshGeneratorTriangle::writeToTriangle()
 
     QDir dir;
     dir.mkdir(QDir::temp().absolutePath() + "/agros2d");
-    QFile file(tempProblemFileName() + ".poly");
+    QFile file(randomProblemFileName(true) + ".poly");
 
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text))
     {
@@ -314,7 +316,7 @@ bool MeshGeneratorTriangle::readTriangleMeshFormat()
     edgeList.clear();
     elementList.clear();
 
-    QFile fileNode(tempProblemFileName() + ".node");
+    QFile fileNode(randomProblemFileName(false) + ".node");
     if (!fileNode.open(QIODevice::ReadOnly | QIODevice::Text))
     {
         Agros2D::log()->printError(tr("Mesh generator"), tr("Could not read Triangle node file"));
@@ -322,7 +324,7 @@ bool MeshGeneratorTriangle::readTriangleMeshFormat()
     }
     QTextStream inNode(&fileNode);
 
-    QFile fileEdge(tempProblemFileName() + ".edge");
+    QFile fileEdge(randomProblemFileName(false) + ".edge");
     if (!fileEdge.open(QIODevice::ReadOnly | QIODevice::Text))
     {
         Agros2D::log()->printError(tr("Mesh generator"), tr("Could not read Triangle edge file"));
@@ -330,7 +332,7 @@ bool MeshGeneratorTriangle::readTriangleMeshFormat()
     }
     QTextStream inEdge(&fileEdge);
 
-    QFile fileEle(tempProblemFileName() + ".ele");
+    QFile fileEle(randomProblemFileName(false) + ".ele");
     if (!fileEle.open(QIODevice::ReadOnly | QIODevice::Text))
     {
         Agros2D::log()->printError(tr("Mesh generator"), tr("Could not read Triangle elements file"));
@@ -338,7 +340,7 @@ bool MeshGeneratorTriangle::readTriangleMeshFormat()
     }
     QTextStream inEle(&fileEle);
 
-    QFile fileNeigh(tempProblemFileName() + ".neigh");
+    QFile fileNeigh(randomProblemFileName(false) + ".neigh");
     if (!fileNeigh.open(QIODevice::ReadOnly | QIODevice::Text))
     {
         Agros2D::log()->printError(tr("Mesh generator"), tr("Could not read Triangle neighbors elements file"));

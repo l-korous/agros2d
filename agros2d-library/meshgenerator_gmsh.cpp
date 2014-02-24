@@ -52,9 +52,15 @@ bool MeshGeneratorGMSH::mesh()
     if (writeToGmsh())
     {
         // exec triangle
+        if(this->m_process)
+        {
+            this->m_process->terminate();
+            delete this->m_process;
+            this->m_process = NULL;
+        }
         m_process = new QProcess();
-        m_process->setStandardOutputFile(tempProblemFileName() + ".gmsh.out");
-        m_process->setStandardErrorFile(tempProblemFileName() + ".gmsh.err");
+        m_process->setStandardOutputFile(randomProblemFileName(false) + ".gmsh.out");
+        m_process->setStandardErrorFile(randomProblemFileName(false) + ".gmsh.err");
         connect(m_process, SIGNAL(error(QProcess::ProcessError)), this, SLOT(meshGmshError(QProcess::ProcessError)));
         connect(m_process, SIGNAL(finished(int)), this, SLOT(meshGmshCreated(int)));
 
@@ -67,13 +73,8 @@ bool MeshGeneratorGMSH::mesh()
         QString triangleGMSH = "%1 -2 \"%2.geo\"";
         m_process->start(triangleGMSH.
                          arg(gmshBinary).
-                         arg(tempProblemFileName()));
-
-        // execute an event loop to process the request (nearly-synchronous)
-        QEventLoop eventLoop;
-        connect(m_process, SIGNAL(finished(int)), &eventLoop, SLOT(quit()));
-        connect(m_process, SIGNAL(error(QProcess::ProcessError)), &eventLoop, SLOT(quit()));
-        eventLoop.exec();
+                         arg(randomProblemFileName(false)));
+        m_process->waitForFinished(10000);
     }
     else
     {
@@ -87,7 +88,7 @@ void MeshGeneratorGMSH::meshGmshError(QProcess::ProcessError error)
 {
     m_isError = true;
     Agros2D::log()->printError(tr("Mesh generator"), tr("Could not start GMSH"));
-    m_process->kill();
+    m_process->terminate();
 }
 
 
@@ -100,12 +101,12 @@ void MeshGeneratorGMSH::meshGmshCreated(int exitCode)
         if (readGmshMeshFile())
         {
             // Agros2D::log()->printDebug(tr("Mesh generator"), tr("Mesh was converted to Hermes2D mesh file"));
-
+            m_process->terminate();
             //  remove gmsh temp files
-            QFile::remove(tempProblemFileName() + ".geo");
-            QFile::remove(tempProblemFileName() + ".msh");
-            QFile::remove(tempProblemFileName() + ".gmsh.out");
-            QFile::remove(tempProblemFileName() + ".gmsh.err");
+            QFile::remove(randomProblemFileName(false) + ".geo");
+            QFile::remove(randomProblemFileName(false) + ".msh");
+            QFile::remove(randomProblemFileName(false) + ".gmsh.out");
+            QFile::remove(randomProblemFileName(false) + ".gmsh.err");
         }
         else
         {
@@ -116,10 +117,6 @@ void MeshGeneratorGMSH::meshGmshCreated(int exitCode)
     else
     {
         m_isError = true;
-        QString errorMessage = readFileContent(tempProblemFileName() + ".gmsh.err");
-        errorMessage.insert(0, "\n");
-        errorMessage.append("\n");
-        Agros2D::log()->printError(tr("Mesh generator"), errorMessage);
     }
 }
 
@@ -143,7 +140,7 @@ bool MeshGeneratorGMSH::writeToGmsh()
 
     QDir dir;
     dir.mkdir(QDir::temp().absolutePath() + "/agros2d");
-    QFile file(tempProblemFileName() + ".geo");
+    QFile file(randomProblemFileName(true) + ".geo");
 
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text))
     {
@@ -377,7 +374,7 @@ bool MeshGeneratorGMSH::readGmshMeshFile()
 
     int k;
 
-    QFile fileGMSH(tempProblemFileName() + ".msh");
+    QFile fileGMSH(randomProblemFileName(false) + ".msh");
     if (!fileGMSH.open(QIODevice::ReadOnly | QIODevice::Text))
     {
         Agros2D::log()->printError(tr("Mesh generator"), tr("Could not read GMSH mesh file"));
