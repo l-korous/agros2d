@@ -21,6 +21,8 @@
 #define MESHGENERATOR_H
 
 #include "util.h"
+#include "hermes2d/field.h"
+#include "mesh.h"
 #include "util/loops.h"
 #ifdef Q_WS_X11
 #include <tr1/memory>
@@ -41,7 +43,7 @@ public:
 
     virtual bool mesh() = 0;
 
-    inline std::auto_ptr<XMLSubdomains::domain> xmldomain() { return m_xmldomain; }
+    inline Hermes::vector<Hermes::Hermes2D::MeshSharedPtr> meshes() { return m_meshes; }
 
 protected:
     struct MeshEdge
@@ -139,6 +141,7 @@ protected:
         int neigh[3];
     };
 
+    /// \todo Delete?
     /*
     struct MeshNode
     {
@@ -160,13 +163,28 @@ protected:
     QList<MeshEdge> edgeList;
     QList<MeshElement> elementList;
 
-    bool writeToHermes();
+    /// Complete method translating the internal generator structures into m_meshes.
+    void writeToHermes();
+
+    /// Utility method serving the purpose of (potential) multi-mesh setup.
+    /// Translates the internal structures into the global mesh (of which every other mesh in the system is a submesh of).
+    /// \param[out] global_mesh The global mesh structure being filled by this method.
+    void writeTemporaryGlobalMeshToHermes(Hermes::Hermes2D::MeshSharedPtr global_mesh);
+
+    /// Fills MeshEdge::neighElem structures for detecting subdomain boundaries etc.
+    void fillNeighborStructures();
+
+    /// Updates vertex nodes coordinates according to curvature on edges.
+    void moveNodesOnCurvedEdges();
+
+    /// Calculate the counts of elements, edges for a subdomain.
+    void getDataCountsForSingleSubdomain(FieldInfo* fieldInfo, int& element_number_count, int& boundary_edge_number_count, int& inner_edge_number_count);
+
     bool prepare();
 
     bool m_isError;
     QSharedPointer<QProcess> m_process;
-
-    std::auto_ptr<XMLSubdomains::domain> m_xmldomain;
+    Hermes::vector<Hermes::Hermes2D::MeshSharedPtr> m_meshes;
 };
 
 #endif //MESHGENERATOR_H
